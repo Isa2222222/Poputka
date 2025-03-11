@@ -23,6 +23,7 @@ class _AreaSelectorState extends State<AreaSelector> {
   final TextEditingController _controller = TextEditingController();
   final PocketBaseService _pbService = PocketBaseService();
   List<RecordModel> _areas = [];
+  List<RecordModel> _filteredAreas = [];
   bool _isLoading = false;
   bool _showDropdown = false;
   String? _errorMessage;
@@ -33,7 +34,18 @@ class _AreaSelectorState extends State<AreaSelector> {
     _loadAreas();
   }
 
+  @override
+  void didUpdateWidget(AreaSelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Refilter areas if the excluded area changed
+    if (oldWidget.excludeArea?.id != widget.excludeArea?.id) {
+      _updateFilteredAreas();
+    }
+  }
+
   Future<void> _loadAreas() async {
+    if (_isLoading) return; // Prevent multiple simultaneous loads
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -41,10 +53,15 @@ class _AreaSelectorState extends State<AreaSelector> {
 
     try {
       final areas = await _pbService.getAreas();
+
+      if (!mounted) return; // Check if widget is still in the tree
+
       setState(() {
         _areas = areas;
         _isLoading = false;
       });
+
+      _updateFilteredAreas();
 
       if (_areas.isEmpty) {
         setState(() {
@@ -52,7 +69,8 @@ class _AreaSelectorState extends State<AreaSelector> {
         });
       }
     } catch (e) {
-      print('Error loading areas: $e');
+      if (!mounted) return;
+
       setState(() {
         _isLoading = false;
         _errorMessage = 'Ошибка загрузки данных';
@@ -60,11 +78,11 @@ class _AreaSelectorState extends State<AreaSelector> {
     }
   }
 
-  List<RecordModel> _getFilteredAreas() {
+  void _updateFilteredAreas() {
     final query = _controller.text.toLowerCase();
 
     // Filter areas by search query and exclude the selected area from the other field
-    return _areas.where((area) {
+    final filtered = _areas.where((area) {
       // Exclude the area if it's selected in the other field
       if (widget.excludeArea != null && area.id == widget.excludeArea!.id) {
         return false;
@@ -78,6 +96,20 @@ class _AreaSelectorState extends State<AreaSelector> {
 
       return true;
     }).toList();
+
+    setState(() {
+      _filteredAreas = filtered;
+    });
+  }
+
+  void _toggleDropdown() {
+    setState(() => _showDropdown = !_showDropdown);
+  }
+
+  void _selectArea(RecordModel area) {
+    _controller.text = area.data['name'].toString();
+    widget.onAreaSelected(area);
+    setState(() => _showDropdown = false);
   }
 
   @override
@@ -107,13 +139,13 @@ class _AreaSelectorState extends State<AreaSelector> {
                   )
                 : IconButton(
                     icon: const Icon(Icons.arrow_drop_down),
-                    onPressed: () {
-                      setState(() => _showDropdown = !_showDropdown);
-                    },
+                    onPressed: _toggleDropdown,
                   ),
           ),
           onTap: () {
-            setState(() => _showDropdown = true);
+            if (!_showDropdown) {
+              _toggleDropdown();
+            }
           },
           readOnly: true, // Make it act like a dropdown
         ),
@@ -128,72 +160,80 @@ class _AreaSelectorState extends State<AreaSelector> {
               ),
             ),
           ),
-        if (_showDropdown)
-          Container(
-            constraints: const BoxConstraints(maxHeight: 200),
-            margin: const EdgeInsets.only(top: 4),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: _isLoading
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(16.0),
-                        child: CircularProgressIndicator(),
-                      ),
-                    )
-                  : _areas.isEmpty
-                      ? Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Нет доступных мест',
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                TextButton.icon(
-                                  onPressed: _loadAreas,
-                                  icon: const Icon(Icons.refresh),
-                                  label: const Text('Обновить'),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      : ListView.builder(
-                          shrinkWrap: true,
-                          padding: EdgeInsets.zero,
-                          itemCount: _getFilteredAreas().length,
-                          itemBuilder: (context, index) {
-                            final area = _getFilteredAreas()[index];
-                            return ListTile(
-                              title: Text(area.data['name'].toString()),
-                              onTap: () {
-                                _controller.text = area.data['name'].toString();
-                                widget.onAreaSelected(area);
-                                setState(() => _showDropdown = false);
-                              },
-                            );
-                          },
-                        ),
-            ),
-          ),
+        if (_showDropdown) _buildDropdown(),
       ],
+    );
+  }
+
+  Widget _buildDropdown() {
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 200),
+      margin: const EdgeInsets.only(top: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: _isLoading
+            ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            : _areas.isEmpty
+                ? _buildEmptyState()
+                : _buildAreasList(),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Нет доступных мест',
+              style: TextStyle(
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: _loadAreas,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Обновить'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAreasList() {
+    // Pre-filtered list for better performance
+    return ListView.builder(
+      shrinkWrap: true,
+      padding: EdgeInsets.zero,
+      itemCount: _filteredAreas.length,
+      itemBuilder: (context, index) {
+        final area = _filteredAreas[index];
+        return ListTile(
+          title: Text(area.data['name'].toString()),
+          onTap: () => _selectArea(area),
+        );
+      },
     );
   }
 

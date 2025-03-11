@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../constants/app_colors.dart';
 
 class BottomNavBar extends StatelessWidget {
   final int currentIndex;
@@ -12,22 +13,28 @@ class BottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return NavigationBar(
+      backgroundColor: Colors.white,
+      indicatorColor: AppColors.primary.withOpacity(0.2),
       destinations: const [
         NavigationDestination(
-          icon: Icon(Icons.home),
-          label: 'Home',
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home),
+          label: 'Главная',
         ),
         NavigationDestination(
-          icon: Icon(Icons.directions_car),
-          label: 'Rides',
+          icon: Icon(Icons.directions_car_outlined),
+          selectedIcon: Icon(Icons.directions_car),
+          label: 'Поездки',
         ),
         NavigationDestination(
-          icon: Icon(Icons.message),
-          label: 'Messages',
+          icon: Icon(Icons.message_outlined),
+          selectedIcon: Icon(Icons.message),
+          label: 'Сообщения',
         ),
         NavigationDestination(
-          icon: Icon(Icons.person),
-          label: 'Profile',
+          icon: Icon(Icons.person_outline),
+          selectedIcon: Icon(Icons.person),
+          label: 'Профиль',
         ),
       ],
       onDestinationSelected: (index) {

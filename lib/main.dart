@@ -16,10 +16,11 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'Ride Share App',
+      title: 'Poputka',
       theme: ThemeData(
         primarySwatch: Colors.yellow,
         useMaterial3: true,
+        scaffoldBackgroundColor: Colors.grey[100],
       ),
       routerConfig: appRouter,
       debugShowCheckedModeBanner: false,

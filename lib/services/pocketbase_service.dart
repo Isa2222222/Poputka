@@ -27,7 +27,7 @@ class PocketBaseService {
 
     try {
       // Try to fetch areas from the PocketBase 'Area' collection
-      final records = await pb.collection('Area').getFullList(
+      final records = await pb.collection('poputka_area').getFullList(
             sort: '-created',
           );
 
@@ -70,7 +70,7 @@ class PocketBaseService {
   // Method to create a new area (for testing)
   Future<RecordModel?> createArea(String name) async {
     try {
-      final record = await pb.collection('Area').create(body: {
+      final record = await pb.collection('poputka_area').create(body: {
         'name': name,
       });
       print('Successfully created area: ${record.data['name']}');

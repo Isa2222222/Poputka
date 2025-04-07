@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
 import '../services/pocketbase_service.dart';
-import '../constants/app_colors.dart';
 
 class AreaSelector extends StatefulWidget {
   final String hintText;
-  final Function(RecordModel) onAreaSelected;
+  final Function(RecordModel?) onAreaSelected;
   final RecordModel? excludeArea; // Area to exclude from selection
+  final RecordModel? selectedArea; // Currently selected area
 
   const AreaSelector({
     super.key,
     required this.hintText,
     required this.onAreaSelected,
     this.excludeArea,
+    this.selectedArea,
   });
 
   @override
@@ -32,11 +33,28 @@ class _AreaSelectorState extends State<AreaSelector> {
   void initState() {
     super.initState();
     _loadAreas();
+
+    // Set initial text if we have a selected area
+    if (widget.selectedArea != null) {
+      _controller.text = widget.selectedArea!.data['name'].toString();
+    }
   }
 
   @override
   void didUpdateWidget(AreaSelector oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    // Update controller text if selected area changes
+    if (widget.selectedArea != null &&
+        (oldWidget.selectedArea?.id != widget.selectedArea?.id)) {
+      _controller.text = widget.selectedArea!.data['name'].toString();
+    }
+
+    // Clear text if selected area was removed
+    if (widget.selectedArea == null && oldWidget.selectedArea != null) {
+      _controller.clear();
+    }
+
     // Refilter areas if the excluded area changed
     if (oldWidget.excludeArea?.id != widget.excludeArea?.id) {
       _updateFilteredAreas();
@@ -104,6 +122,11 @@ class _AreaSelectorState extends State<AreaSelector> {
 
   void _toggleDropdown() {
     setState(() => _showDropdown = !_showDropdown);
+
+    // Make sure filtered areas are updated when dropdown is shown
+    if (!_showDropdown) {
+      _updateFilteredAreas();
+    }
   }
 
   void _selectArea(RecordModel area) {
@@ -112,42 +135,77 @@ class _AreaSelectorState extends State<AreaSelector> {
     setState(() => _showDropdown = false);
   }
 
+  void _clearSelection() {
+    _controller.clear();
+    widget.onAreaSelected(null);
+    setState(() {
+      _showDropdown = true; // Show dropdown after clearing
+      _updateFilteredAreas(); // Update filtered areas after clearing
+    });
+  }
+
+  void _showDropdownWithOptions() {
+    // Update filtered areas before showing dropdown
+    _updateFilteredAreas();
+    setState(() => _showDropdown = true);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TextField(
-          controller: _controller,
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.location_on_outlined),
-            hintText: widget.hintText,
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide.none,
+        InkWell(
+          onTap: _showDropdownWithOptions,
+          borderRadius: BorderRadius.circular(8),
+          child: IgnorePointer(
+            ignoring: false, // Allow taps on the TextField for cursor focus
+            child: TextField(
+              controller: _controller,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.location_on_outlined),
+                hintText: widget.hintText,
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Clear button if area is selected
+                    if (_controller.text.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: _clearSelection,
+                        tooltip: 'Очистить',
+                      ),
+                    _isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : IconButton(
+                            icon: Icon(
+                              _showDropdown
+                                  ? Icons.arrow_drop_up
+                                  : Icons.arrow_drop_down,
+                            ),
+                            onPressed: _toggleDropdown,
+                            tooltip: 'Показать варианты',
+                          ),
+                  ],
+                ),
+              ),
+              onTap: _showDropdownWithOptions,
+              readOnly: true, // Make it act like a dropdown
             ),
-            suffixIcon: _isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: Padding(
-                      padding: EdgeInsets.all(8.0),
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  )
-                : IconButton(
-                    icon: const Icon(Icons.arrow_drop_down),
-                    onPressed: _toggleDropdown,
-                  ),
           ),
-          onTap: () {
-            if (!_showDropdown) {
-              _toggleDropdown();
-            }
-          },
-          readOnly: true, // Make it act like a dropdown
         ),
         if (_errorMessage != null && !_isLoading)
           Padding(
@@ -189,7 +247,7 @@ class _AreaSelectorState extends State<AreaSelector> {
                   child: CircularProgressIndicator(),
                 ),
               )
-            : _areas.isEmpty
+            : _filteredAreas.isEmpty
                 ? _buildEmptyState()
                 : _buildAreasList(),
       ),

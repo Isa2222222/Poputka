@@ -5,6 +5,7 @@ import '../pages/home_page.dart';
 import '../pages/rides_page.dart';
 import '../pages/messages_page.dart';
 import '../pages/profile_page.dart';
+import '../models/ride_model.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -21,7 +22,14 @@ final appRouter = GoRouter(
       routes: [
         GoRoute(
           path: '/',
-          builder: (context, state) => const HomePage(),
+          name: 'home',
+          builder: (context, state) {
+            // Проверяем, есть ли параметр rideToEdit
+            final Map<String, dynamic>? args =
+                state.extra as Map<String, dynamic>?;
+            final RideModel? rideToEdit = args?['rideToEdit'];
+            return HomePage(rideToEdit: rideToEdit);
+          },
         ),
         GoRoute(
           path: '/rides',

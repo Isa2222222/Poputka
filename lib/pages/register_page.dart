@@ -13,7 +13,6 @@ class RegisterPage extends StatefulWidget {
 class _RegisterPageState extends State<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _usernameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -41,7 +40,6 @@ class _RegisterPageState extends State<RegisterPage> {
         _emailController.text.trim(),
         _passwordController.text,
         _nameController.text.trim(),
-        _usernameController.text.trim(),
         _phoneController.text.trim(),
       );
 
@@ -119,8 +117,8 @@ class _RegisterPageState extends State<RegisterPage> {
               TextFormField(
                 controller: _nameController,
                 decoration: InputDecoration(
-                  labelText: 'Полное имя',
-                  hintText: 'Введите ваше полное имя',
+                  labelText: 'Имя',
+                  hintText: 'Введите ваше имя',
                   prefixIcon: const Icon(Icons.person),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -129,29 +127,6 @@ class _RegisterPageState extends State<RegisterPage> {
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Пожалуйста, введите имя';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // Username field
-              TextFormField(
-                controller: _usernameController,
-                decoration: InputDecoration(
-                  labelText: 'Имя пользователя',
-                  hintText: 'Введите имя пользователя',
-                  prefixIcon: const Icon(Icons.account_circle),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Пожалуйста, введите имя пользователя';
-                  }
-                  if (value.contains(' ')) {
-                    return 'Имя пользователя не должно содержать пробелы';
                   }
                   return null;
                 },
@@ -304,7 +279,6 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   void dispose() {
     _nameController.dispose();
-    _usernameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();

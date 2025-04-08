@@ -25,6 +25,8 @@ class _RidesPageState extends State<RidesPage> {
   }
 
   Future<void> _loadRides() async {
+    if (!mounted) return; // Проверяем, что виджет все еще в дереве
+
     setState(() {
       _isLoading = true;
       _error = null;
@@ -32,11 +34,15 @@ class _RidesPageState extends State<RidesPage> {
 
     try {
       final rides = await _pbService.getUserRides();
+      if (!mounted) return; // Проверяем снова перед setState
+
       setState(() {
         _rides = rides;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return; // Проверяем снова перед setState
+
       setState(() {
         _error = e.toString();
         _isLoading = false;
@@ -47,32 +53,41 @@ class _RidesPageState extends State<RidesPage> {
   Future<void> _cancelRide(String rideId) async {
     try {
       await _pbService.cancelRide(rideId);
+      if (!mounted) return; // Проверяем перед обновлением списка
+
       // Обновляем список поездок после отмены
-      _loadRides();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Поездка отменена'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+      await _loadRides();
+
+      if (!mounted) return; // Проверяем перед показом SnackBar
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Поездка отменена'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка при отмене поездки: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (!mounted) return; // Проверяем перед показом ошибки
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при отмене поездки: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
   void _editRide(RideModel ride) {
     context.go('/', extra: {'rideToEdit': ride});
-    // После возвращения с экрана редактирования обновим список
-    Future.delayed(const Duration(milliseconds: 300), _loadRides);
+    // Убираем автоматическое обновление, так как оно может вызвать ошибку
+    // Вместо этого обновление будет происходить при возвращении на страницу
+  }
+
+  @override
+  void dispose() {
+    // Очищаем все подписки и таймеры, если они есть
+    super.dispose();
   }
 
   @override

@@ -12,6 +12,7 @@ import 'services/pocketbase_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await pocketBaseService.initAuth();
+  await pocketBaseService.saveAuthState();
   runApp(const MyApp());
 }
 
@@ -56,6 +57,13 @@ final _router = GoRouter(
     GoRoute(
       path: '/register',
       builder: (context, state) => const RegisterPage(),
+    ),
+    GoRoute(
+      path: '/edit-profile',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return EditProfilePage(initialData: extra);
+      },
     ),
     ShellRoute(
       builder: (context, state, child) {

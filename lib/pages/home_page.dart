@@ -333,7 +333,10 @@ class _HomePageState extends State<HomePage> {
               backgroundColor: !isDriver ? AppColors.primary : Colors.white,
               foregroundColor: !isDriver ? Colors.white : Colors.black,
             ),
-            child: const Text('Найти попутчика'),
+            child: const Text(
+              'Найти попутчика',
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ),
         const SizedBox(width: 8),
@@ -344,7 +347,10 @@ class _HomePageState extends State<HomePage> {
               backgroundColor: isDriver ? AppColors.primary : Colors.white,
               foregroundColor: isDriver ? Colors.white : Colors.black,
             ),
-            child: const Text('Я водитель'),
+            child: const Text(
+              'Я водитель',
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ),
       ],
@@ -358,8 +364,13 @@ class _HomePageState extends State<HomePage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Выберите маршрут:',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            const Expanded(
+              child: Text(
+                'Выберите маршрут:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
             // Swap button
             if (fromAreaRecord != null && toAreaRecord != null)
               IconButton(
@@ -394,8 +405,10 @@ class _HomePageState extends State<HomePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Выберите время:',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        const Text(
+          'Выберите время:',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -422,12 +435,14 @@ class _HomePageState extends State<HomePage> {
           children: [
             const Icon(Icons.calendar_today),
             const SizedBox(width: 8),
-            Text(
-              selectedDate != null
-                  ? '${selectedDate!.day}.${selectedDate!.month}.${selectedDate!.year}'
-                  : 'Выберите дни',
+            Expanded(
+              child: Text(
+                selectedDate != null
+                    ? '${selectedDate!.day}.${selectedDate!.month}.${selectedDate!.year}'
+                    : 'Выберите дни',
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            const Spacer(),
             const Icon(Icons.arrow_drop_down),
           ],
         ),
@@ -449,12 +464,14 @@ class _HomePageState extends State<HomePage> {
           children: [
             const Icon(Icons.access_time),
             const SizedBox(width: 8),
-            Text(
-              selectedTime != null
-                  ? '${selectedTime!.hour}:${selectedTime!.minute.toString().padLeft(2, '0')}'
-                  : 'Выберите время',
+            Expanded(
+              child: Text(
+                selectedTime != null
+                    ? '${selectedTime!.hour}:${selectedTime!.minute.toString().padLeft(2, '0')}'
+                    : 'Выберите время',
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            const Spacer(),
             const Icon(Icons.arrow_drop_down),
           ],
         ),

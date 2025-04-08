@@ -117,11 +117,13 @@ class RideCard extends StatelessWidget {
               Text(
                 'Откуда: ${ride.fromAreaName}',
                 style: const TextStyle(fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 4),
               Text(
                 'Куда: ${ride.toAreaName}',
                 style: const TextStyle(fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
@@ -240,7 +242,11 @@ class RideCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              Text(ride.notes!),
+              Text(
+                ride.notes!,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+              ),
             ],
           ),
         ),

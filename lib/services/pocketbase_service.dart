@@ -63,7 +63,12 @@ class PocketBaseService {
           await saveAuthState();
         }
         if (userRecord != null) {
-          return userRecord.toJson();
+          // Получаем полные данные пользователя
+          final fullUserData =
+              await pb.collection('poputka_users').getOne(userRecord.id);
+          final userData = fullUserData.toJson();
+          print('User data: $userData'); // Added logging
+          return userData;
         } else {
           throw Exception('User data not found after refresh.');
         }
@@ -94,29 +99,24 @@ class PocketBaseService {
     }
   }
 
-  Future<bool> register(String email, String password, String name,
-      String username, String phone) async {
+  Future<bool> register(
+      String email, String password, String name, String phone) async {
     try {
-      final body = <String, dynamic>{
-        "email": email,
-        "password": password,
-        "passwordConfirm": password,
-        "name": name,
-        "username": username,
-        "phone": phone,
+      print('Attempting to register user with email: $email');
+      final body = {
+        'email': email,
+        'password': password,
+        'passwordConfirm': password,
+        'name': name,
+        'username': name, // Use name as username
+        'phone': phone,
       };
 
-      print(
-          'Attempting to register user with email: $email and username: $username');
-
-      await pb.collection('poputka_users').create(body: body);
-
-      print('User created successfully, attempting to log in');
-
-      // After registration, automatically log in
-      return await login(email, password);
+      final result = await pb.collection('poputka_users').create(body: body);
+      print('Registration successful: ${result.id}');
+      return true;
     } catch (e) {
-      print('Registration error details: $e');
+      print('Registration error: $e');
       return false;
     }
   }
@@ -347,6 +347,39 @@ class PocketBaseService {
   String getBannerImageUrl() {
     // Use a direct URL to an image for testing
     return 'https://raw.githubusercontent.com/flutter/website/main/src/assets/images/flutter-logo-sharing.png';
+  }
+
+  Future<bool> updateUserProfile(String name, String phone) async {
+    try {
+      print('Starting profile update with name: $name, phone: $phone');
+
+      if (!pb.authStore.isValid) {
+        print('User not authenticated');
+        throw Exception('User not authenticated');
+      }
+
+      // Обновляем данные текущего пользователя
+      final updatedRecord = await pb.collection('poputka_users').update(
+        pb.authStore.model!.id,
+        body: {
+          'username': name,
+          'name': name,
+          'phone': phone,
+        },
+      );
+
+      print('Profile updated successfully: ${updatedRecord.toJson()}');
+
+      // Обновляем данные в authStore
+      pb.authStore.save(pb.authStore.token, updatedRecord);
+      await saveAuthState();
+
+      return true;
+    } catch (e) {
+      print('Error updating user profile: $e');
+      print('Error details: ${e.toString()}');
+      return false;
+    }
   }
 }
 

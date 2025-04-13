@@ -8,7 +8,6 @@ class PocketBaseService {
   static final PocketBaseService _instance = PocketBaseService._internal();
   final PocketBase pb = PocketBase('https://restaurant-menu.fly.dev');
 
-  // Cache for areas to prevent unnecessary API calls
   List<RecordModel>? _cachedAreas;
   DateTime? _lastFetchTime;
   final _cacheDuration = const Duration(minutes: 5);

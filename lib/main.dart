@@ -6,6 +6,7 @@ import 'pages/messages_page.dart';
 import 'pages/profile_page.dart';
 import 'pages/login_page.dart';
 import 'pages/register_page.dart';
+import 'pages/edit_profile_page.dart';
 import 'widgets/bottom_nav_bar.dart';
 import 'services/pocketbase_service.dart';
 

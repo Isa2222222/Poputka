@@ -194,7 +194,7 @@ class PocketBaseService {
     }
   }
 
-  // Method to create a ride
+  // Метод для создания поездки
   Future<RecordModel?> createRide({
     required String fromAreaId,
     required String toAreaId,
@@ -212,7 +212,36 @@ class PocketBaseService {
       final formattedTime =
           "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:00";
 
-      final record = await pb.collection('poputka_rides').create(body: {
+      print('Attempting to create record in poputka_ride collection...');
+
+      // Check authentication first
+      if (!pb.authStore.isValid || pb.authStore.model == null) {
+        print('ERROR: User not authenticated');
+        return null;
+      }
+
+      print('Current user ID: ${pb.authStore.model!.id}');
+      print('Creating ride with data:');
+      print('- fromArea: $fromAreaId');
+      print('- toArea: $toAreaId');
+      print('- date: $formattedDate $formattedTime');
+      print('- isDriver: $isDriver');
+      print('- availableSeats: $availableSeats');
+      print('- notes: $notes');
+      print('- price: $price');
+
+      // Verify that fromArea and toArea exist before creating the ride
+      try {
+        await pb.collection('poputka_area').getOne(fromAreaId);
+        await pb.collection('poputka_area').getOne(toAreaId);
+        print('Verified that fromArea and toArea exist');
+      } catch (e) {
+        print('ERROR: Could not verify area IDs - $e');
+        return null;
+      }
+
+      // Create the record
+      final record = await pb.collection('poputka_ride').create(body: {
         'fromArea': fromAreaId,
         'toArea': toAreaId,
         'date': '$formattedDate $formattedTime',
@@ -221,12 +250,28 @@ class PocketBaseService {
         'notes': notes ?? '',
         'price': price,
         'status': 'pending', // Начальный статус - "В обработке"
-        'driver': pb.authStore.model?.id, // Current user as driver
+        'driver': pb.authStore.model!.id, // Current user as driver
       });
+
+      print('Record created successfully: ${record.id}');
+      print('Record data: ${record.data}');
+
+      // Verify the record was created correctly by fetching it with expand
+      try {
+        final createdRecord = await pb.collection('poputka_ride').getOne(
+              record.id,
+              expand: 'fromArea,toArea,driver',
+            );
+        print('Verified created record: ${createdRecord.id}');
+        print('Expand data: ${createdRecord.expand}');
+      } catch (e) {
+        print('Warning: Could not verify record with expand - $e');
+      }
 
       return record;
     } catch (e) {
       print('Error creating ride: $e');
+      print('Stack trace: ${StackTrace.current}');
       return null;
     }
   }
@@ -234,32 +279,417 @@ class PocketBaseService {
   // Получение поездок пользователя
   Future<List<RideModel>> getUserRides() async {
     try {
-      // Получаем записи из коллекции поездок
-      final records = await pb.collection('poputka_rides').getFullList(
+      if (!pb.authStore.isValid) {
+        print('User not authenticated');
+        return [];
+      }
+
+      final userId = pb.authStore.model?.id;
+      if (userId == null) {
+        print('User ID is null');
+        return [];
+      }
+
+      print('Fetching user rides from PocketBase...');
+      print('Current user ID: $userId');
+      print('Auth valid: ${pb.authStore.isValid}');
+      print('Token: ${pb.authStore.token.substring(0, 10)}...');
+
+      // Check if the collection exists
+      try {
+        await pb.collection('poputka_ride').getList(page: 1, perPage: 1);
+        print('Collection poputka_ride exists and is accessible');
+      } catch (e) {
+        print('Error accessing poputka_ride collection: $e');
+        return [];
+      }
+
+      // First, try getting records without expand to see if any exist
+      final recordsWithoutExpand =
+          await pb.collection('poputka_ride').getFullList(
+                sort: '-created',
+                filter: 'driver = "$userId"',
+              );
+
+      print('Found ${recordsWithoutExpand.length} user rides without expand');
+
+      if (recordsWithoutExpand.isEmpty) {
+        print('No rides found for user $userId. Is the filter correct?');
+        return [];
+      }
+
+      // If records exist, fetch them with expand
+      final records = await pb.collection('poputka_ride').getFullList(
             sort: '-created',
-            expand: 'fromArea,toArea',
+            expand: 'fromArea,toArea,driver',
+            filter: 'driver = "$userId"',
           );
+
+      print('Found ${records.length} user rides with expand');
+
+      // Debug the first record
+      if (records.isNotEmpty) {
+        final firstRecord = records.first;
+        print('First record ID: ${firstRecord.id}');
+        print('First record data: ${firstRecord.data}');
+        print('First record expand: ${firstRecord.expand}');
+
+        // Check if the required fields exist
+        print('Has fromArea: ${firstRecord.data.containsKey('fromArea')}');
+        print('Has toArea: ${firstRecord.data.containsKey('toArea')}');
+        print('Has driver: ${firstRecord.data.containsKey('driver')}');
+
+        // Check if these IDs exist in the database
+        if (firstRecord.data.containsKey('fromArea')) {
+          try {
+            final area = await pb
+                .collection('poputka_area')
+                .getOne(firstRecord.data['fromArea']);
+            print('FromArea exists: ${area.id}, ${area.data['name']}');
+          } catch (e) {
+            print('FromArea does not exist: ${firstRecord.data['fromArea']}');
+          }
+        }
+      }
 
       // Преобразуем записи в модели
       final rides = <RideModel>[];
       for (final record in records) {
-        // Получаем связанные области
-        final fromArea = record.expand['fromArea'] as RecordModel?;
-        final toArea = record.expand['toArea'] as RecordModel?;
+        try {
+          print('Processing user ride record: ${record.id}');
 
-        // Если области не найдены, пропускаем запись
-        if (fromArea == null || toArea == null) continue;
+          // Безопасно получаем связанные области и водителя
+          RecordModel? fromArea;
+          RecordModel? toArea;
+          RecordModel? driver;
 
-        rides.add(RideModel.fromRecord(
-          record,
-          fromArea: fromArea,
-          toArea: toArea,
-        ));
+          // Debugging record data
+          print('Record data: ${record.data}');
+          print('Record expand data: ${record.expand}');
+
+          // В первую очередь получаем данные напрямую по ID
+          if (record.data.containsKey('fromArea')) {
+            try {
+              fromArea = await pb
+                  .collection('poputka_area')
+                  .getOne(record.data['fromArea']);
+              print('Retrieved fromArea directly: ${fromArea.data["name"]}');
+            } catch (e) {
+              print('Error fetching fromArea directly: $e');
+            }
+          }
+
+          if (record.data.containsKey('toArea')) {
+            try {
+              toArea = await pb
+                  .collection('poputka_area')
+                  .getOne(record.data['toArea']);
+              print('Retrieved toArea directly: ${toArea.data["name"]}');
+            } catch (e) {
+              print('Error fetching toArea directly: $e');
+            }
+          }
+
+          if (record.data.containsKey('driver')) {
+            try {
+              driver = await pb
+                  .collection('poputka_users')
+                  .getOne(record.data['driver']);
+              print(
+                  'Retrieved driver directly: ${driver.data["name"] ?? driver.data["username"]}');
+            } catch (e) {
+              print('Error fetching driver directly: $e');
+            }
+          }
+
+          // Только потом пробуем получить из expand
+          if (fromArea == null) {
+            fromArea = _getRecordFromExpand(record.expand, 'fromArea');
+            if (fromArea != null) {
+              print('Retrieved fromArea from expand: ${fromArea.data["name"]}');
+            }
+          }
+
+          if (toArea == null) {
+            toArea = _getRecordFromExpand(record.expand, 'toArea');
+            if (toArea != null) {
+              print('Retrieved toArea from expand: ${toArea.data["name"]}');
+            }
+          }
+
+          if (driver == null) {
+            driver = _getRecordFromExpand(record.expand, 'driver');
+            if (driver != null) {
+              print(
+                  'Retrieved driver from expand: ${driver.data["name"] ?? driver.data["username"]}');
+            }
+          }
+
+          // Если driver null, попробуем использовать данные текущего пользователя
+          if (driver == null) {
+            print('Driver data missing, using current user data');
+            try {
+              final userData = await getUserData();
+              if (userData != null) {
+                // Создаем запись из данных пользователя
+                driver = RecordModel(
+                  id: userId,
+                  data: userData,
+                  created: '',
+                  updated: '',
+                );
+                print('Created driver placeholder from user data');
+              }
+            } catch (e) {
+              print('Error getting current user data: $e');
+            }
+          }
+
+          // Если все равно не смогли получить, создаем заглушку
+          if (fromArea == null && record.data.containsKey('fromArea')) {
+            fromArea = RecordModel(
+              id: record.data['fromArea'].toString(),
+              data: {'name': 'Unknown Area'},
+              created: '',
+              updated: '',
+            );
+            print('Created placeholder for fromArea');
+          }
+
+          if (toArea == null && record.data.containsKey('toArea')) {
+            toArea = RecordModel(
+              id: record.data['toArea'].toString(),
+              data: {'name': 'Unknown Area'},
+              created: '',
+              updated: '',
+            );
+            print('Created placeholder for toArea');
+          }
+
+          // Если области не найдены, пропускаем запись
+          if (fromArea == null || toArea == null) {
+            print('Skipping record ${record.id} - missing area data');
+            continue;
+          }
+
+          final ride = RideModel.fromRecord(
+            record,
+            fromArea: fromArea,
+            toArea: toArea,
+            userData: driver,
+          );
+
+          print(
+              'Created user ride model: ${ride.fromAreaName} to ${ride.toAreaName}');
+          rides.add(ride);
+        } catch (e) {
+          print('Error processing record ${record.id}: $e');
+          print('Error details: ${e.toString()}');
+          print('Stack trace: ${StackTrace.current}');
+        }
       }
 
+      print('Total user rides created: ${rides.length}');
       return rides;
     } catch (e) {
       print('Error fetching user rides: $e');
+      print('Stack trace: ${StackTrace.current}');
+      return [];
+    }
+  }
+
+  // Получение поездок для публичного просмотра
+  Future<List<RideModel>> getAllPublicRides() async {
+    try {
+      print('==== getAllPublicRides: Начало запроса ====');
+
+      String filter = 'status = "pending"';
+      print('Используемый фильтр: $filter');
+
+      // Check if the collection exists
+      try {
+        await pb.collection('poputka_ride').getList(page: 1, perPage: 1);
+        print('Collection poputka_ride exists and is accessible');
+      } catch (e) {
+        print('Error accessing poputka_ride collection: $e');
+        return [];
+      }
+
+      // First, try getting records without expand to see if any exist
+      final recordsWithoutExpand =
+          await pb.collection('poputka_ride').getFullList(
+                sort: '-created',
+                filter: filter,
+              );
+
+      print('Found ${recordsWithoutExpand.length} public rides without expand');
+
+      if (recordsWithoutExpand.isEmpty) {
+        print('No public rides found with filter: $filter');
+        return [];
+      }
+
+      print('Запрос к коллекции poputka_ride с expand...');
+
+      // Пробуем получить записи с использованием expand
+      final records = await pb.collection('poputka_ride').getFullList(
+            sort: '-created',
+            filter: filter,
+            expand: 'fromArea,toArea,driver',
+          );
+
+      print('Получено ${records.length} поездок из PocketBase');
+
+      if (records.isEmpty) {
+        print('Нет доступных поездок в базе данных.');
+        return [];
+      }
+
+      // Выводим данные первой записи для отладки
+      if (records.isNotEmpty) {
+        print('Пример данных первой записи:');
+        print('ID: ${records.first.id}');
+        print('Data: ${records.first.data}');
+        print('Expand: ${records.first.expand}');
+
+        // Check if the required fields exist
+        print('Has fromArea: ${records.first.data.containsKey('fromArea')}');
+        print('Has toArea: ${records.first.data.containsKey('toArea')}');
+        print('Has driver: ${records.first.data.containsKey('driver')}');
+      }
+
+      final ridesList = <RideModel>[];
+
+      print('Начинаем обработку записей...');
+      for (var i = 0; i < records.length; i++) {
+        final record = records[i];
+        try {
+          print('Обработка записи $i с ID: ${record.id}');
+
+          // В первую очередь получаем данные напрямую по ID
+          RecordModel? fromArea;
+          RecordModel? toArea;
+          RecordModel? driver;
+
+          if (record.data.containsKey('fromArea')) {
+            try {
+              fromArea = await pb
+                  .collection('poputka_area')
+                  .getOne(record.data['fromArea']);
+              print(
+                  'Получена область fromArea напрямую: ${fromArea.id}, ${fromArea.data['name']}');
+            } catch (e) {
+              print('Ошибка при получении области напрямую: $e');
+            }
+          }
+
+          if (record.data.containsKey('toArea')) {
+            try {
+              toArea = await pb
+                  .collection('poputka_area')
+                  .getOne(record.data['toArea']);
+              print(
+                  'Получена область toArea напрямую: ${toArea.id}, ${toArea.data['name']}');
+            } catch (e) {
+              print('Ошибка при получении области напрямую: $e');
+            }
+          }
+
+          if (record.data.containsKey('driver')) {
+            try {
+              driver = await pb
+                  .collection('poputka_users')
+                  .getOne(record.data['driver']);
+              print(
+                  'Получен водитель напрямую: ${driver.id}, ${driver.data['name'] ?? driver.data['username']}');
+            } catch (e) {
+              print('Ошибка при получении водителя напрямую: $e');
+            }
+          }
+
+          // Только потом пробуем получить из expand
+          if (fromArea == null) {
+            fromArea = _getRecordFromExpand(record.expand, 'fromArea');
+            if (fromArea != null) {
+              print(
+                  'Получена область fromArea из expand: ${fromArea.data["name"]}');
+            }
+          }
+
+          if (toArea == null) {
+            toArea = _getRecordFromExpand(record.expand, 'toArea');
+            if (toArea != null) {
+              print(
+                  'Получена область toArea из expand: ${toArea.data["name"]}');
+            }
+          }
+
+          if (driver == null) {
+            driver = _getRecordFromExpand(record.expand, 'driver');
+            if (driver != null) {
+              print(
+                  'Получен водитель из expand: ${driver.data["name"] ?? driver.data["username"]}');
+            }
+          }
+
+          // Пропускаем записи без областей
+          if (fromArea == null || toArea == null) {
+            print(
+                'Пропускаем запись ${record.id} - отсутствуют данные об областях');
+
+            // Создаем заглушки для отладки, чтобы увидеть хоть какие-то данные
+            final dummyFromArea = fromArea ??
+                RecordModel(
+                  id: record.data['fromArea']?.toString() ?? 'unknown',
+                  data: {'name': 'Неизвестная область'},
+                  created: '',
+                  updated: '',
+                );
+
+            final dummyToArea = toArea ??
+                RecordModel(
+                  id: record.data['toArea']?.toString() ?? 'unknown',
+                  data: {'name': 'Неизвестная область'},
+                  created: '',
+                  updated: '',
+                );
+
+            // Создаем модель для отладки
+            final dummyRide = RideModel.fromRecord(
+              record,
+              fromArea: dummyFromArea,
+              toArea: dummyToArea,
+              userData: driver,
+            );
+
+            print(
+                'Создана модель с заглушками: ${dummyRide.fromAreaName} → ${dummyRide.toAreaName}');
+            ridesList.add(dummyRide);
+            continue;
+          }
+
+          // Создаем объект маршрута
+          final ride = RideModel.fromRecord(
+            record,
+            fromArea: fromArea,
+            toArea: toArea,
+            userData: driver,
+          );
+
+          print(
+              'Добавлена поездка: ${ride.fromAreaName} → ${ride.toAreaName} (${ride.statusText})');
+          ridesList.add(ride);
+        } catch (e) {
+          print('ОШИБКА при обработке записи ${record.id}: $e');
+          print('Трассировка: ${StackTrace.current}');
+        }
+      }
+
+      print('Всего моделей поездок: ${ridesList.length}');
+      return ridesList;
+    } catch (e) {
+      print('ОШИБКА при получении публичных поездок: $e');
+      print('Трассировка: ${StackTrace.current}');
       return [];
     }
   }
@@ -267,29 +697,156 @@ class PocketBaseService {
   // Получение активной поездки пользователя (в статусе "В обработке")
   Future<RideModel?> getActiveRide() async {
     try {
-      final records = await pb.collection('poputka_rides').getList(
-            filter: 'status = "pending"',
+      // Check if user is authenticated
+      if (!pb.authStore.isValid) {
+        print('User not authenticated');
+        return null;
+      }
+
+      final userId = pb.authStore.model?.id;
+      if (userId == null) {
+        print('User ID is null');
+        return null;
+      }
+
+      print('Fetching active ride for user $userId');
+
+      // Используем коллекцию 'poputka_ride' вместо 'poputka_rides'
+      final records = await pb.collection('poputka_ride').getList(
+            filter: 'status = "pending" && driver = "$userId"',
             sort: '-created',
-            expand: 'fromArea,toArea',
+            expand: 'fromArea,toArea,driver',
             page: 1,
             perPage: 1,
           );
 
-      if (records.items.isEmpty) return null;
+      if (records.items.isEmpty) {
+        print('No active ride found for user $userId');
+        return null;
+      }
 
       final record = records.items.first;
-      final fromArea = record.expand['fromArea'] as RecordModel?;
-      final toArea = record.expand['toArea'] as RecordModel?;
+      print('Found active ride: ${record.id}');
+      print('Record data: ${record.data}');
+      print('Expand data: ${record.expand}');
 
-      if (fromArea == null || toArea == null) return null;
+      // Безопасно получаем связанные области
+      RecordModel? fromArea;
+      RecordModel? toArea;
+      RecordModel? driver;
+
+      // В первую очередь получаем данные напрямую по ID
+      if (record.data.containsKey('fromArea')) {
+        try {
+          fromArea = await pb
+              .collection('poputka_area')
+              .getOne(record.data['fromArea']);
+          print('Retrieved fromArea directly: ${fromArea.data["name"]}');
+        } catch (e) {
+          print('Error fetching fromArea: $e');
+        }
+      }
+
+      if (record.data.containsKey('toArea')) {
+        try {
+          toArea =
+              await pb.collection('poputka_area').getOne(record.data['toArea']);
+          print('Retrieved toArea directly: ${toArea.data["name"]}');
+        } catch (e) {
+          print('Error fetching toArea: $e');
+        }
+      }
+
+      if (record.data.containsKey('driver')) {
+        try {
+          driver = await pb
+              .collection('poputka_users')
+              .getOne(record.data['driver']);
+          print(
+              'Retrieved driver directly: ${driver.data["name"] ?? driver.data["username"]}');
+        } catch (e) {
+          print('Error fetching driver: $e');
+        }
+      }
+
+      // Только потом пробуем получить из expand
+      if (fromArea == null) {
+        fromArea = _getRecordFromExpand(record.expand, 'fromArea');
+        if (fromArea != null) {
+          print('Retrieved fromArea from expand: ${fromArea.data["name"]}');
+        }
+      }
+
+      if (toArea == null) {
+        toArea = _getRecordFromExpand(record.expand, 'toArea');
+        if (toArea != null) {
+          print('Retrieved toArea from expand: ${toArea.data["name"]}');
+        }
+      }
+
+      if (driver == null) {
+        driver = _getRecordFromExpand(record.expand, 'driver');
+        if (driver != null) {
+          print(
+              'Retrieved driver from expand: ${driver.data["name"] ?? driver.data["username"]}');
+        }
+      }
+
+      // Если все равно не смогли получить, создаем заглушку
+      if (fromArea == null && record.data.containsKey('fromArea')) {
+        fromArea = RecordModel(
+          id: record.data['fromArea'].toString(),
+          data: {'name': 'Unknown Area'},
+          created: '',
+          updated: '',
+        );
+        print('Created placeholder for fromArea');
+      }
+
+      if (toArea == null && record.data.containsKey('toArea')) {
+        toArea = RecordModel(
+          id: record.data['toArea'].toString(),
+          data: {'name': 'Unknown Area'},
+          created: '',
+          updated: '',
+        );
+        print('Created placeholder for toArea');
+      }
+
+      // If driver is still null, use current user data
+      if (driver == null) {
+        print('Driver data missing, using current user data');
+        try {
+          final userData = await getUserData();
+          if (userData != null) {
+            driver = RecordModel(
+              id: userId,
+              data: userData,
+              created: '',
+              updated: '',
+            );
+            print('Created driver placeholder from user data');
+          }
+        } catch (e) {
+          print('Error getting current user data: $e');
+        }
+      }
+
+      // Если области не найдены, пропускаем запись
+      if (fromArea == null || toArea == null) {
+        print('Missing area data for ride ${record.id}');
+        return null;
+      }
 
       return RideModel.fromRecord(
         record,
         fromArea: fromArea,
         toArea: toArea,
+        userData: driver,
       );
     } catch (e) {
       print('Error fetching active ride: $e');
+      print('Stack trace: ${StackTrace.current}');
       return null;
     }
   }
@@ -297,7 +854,8 @@ class PocketBaseService {
   // Отмена поездки
   Future<bool> cancelRide(String rideId) async {
     try {
-      await pb.collection('poputka_rides').update(rideId, body: {
+      // Используем коллекцию 'poputka_ride' вместо 'poputka_rides'
+      await pb.collection('poputka_ride').update(rideId, body: {
         'status': 'cancelled',
       });
       return true;
@@ -326,7 +884,8 @@ class PocketBaseService {
       final formattedTime =
           "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:00";
 
-      final record = await pb.collection('poputka_rides').update(rideId, body: {
+      // Используем коллекцию 'poputka_ride' вместо 'poputka_rides'
+      final record = await pb.collection('poputka_ride').update(rideId, body: {
         'fromArea': fromAreaId,
         'toArea': toAreaId,
         'date': '$formattedDate $formattedTime',
@@ -377,6 +936,134 @@ class PocketBaseService {
     } catch (e) {
       print('Error updating user profile: $e');
       print('Error details: ${e.toString()}');
+      return false;
+    }
+  }
+
+  // Вспомогательный метод для безопасного извлечения RecordModel из expand
+  RecordModel? _getRecordFromExpand(Map<String, dynamic> expand, String key) {
+    if (expand.isEmpty) {
+      print('Expand map is empty');
+      return null;
+    }
+
+    if (!expand.containsKey(key)) {
+      print(
+          'Key "$key" not found in expand map. Available keys: ${expand.keys.join(', ')}');
+      return null;
+    }
+
+    final data = expand[key];
+    print('Expand data for key "$key": $data');
+
+    if (data is RecordModel) {
+      print('Data is RecordModel');
+      return data;
+    } else if (data is List && data.isNotEmpty) {
+      print('Data is List with ${data.length} items');
+      final item = data.first;
+      if (item is RecordModel) {
+        return item;
+      } else {
+        print('First item is not RecordModel, but ${item.runtimeType}');
+      }
+    } else {
+      print('Data is neither RecordModel nor List, but ${data.runtimeType}');
+    }
+    return null;
+  }
+
+  // Получение данных пользователя по ID
+  Future<Map<String, dynamic>?> getUserById(String userId) async {
+    try {
+      print('Fetching user data for user ID: $userId');
+
+      if (userId.isEmpty) {
+        print('Error: Empty user ID provided');
+        return null;
+      }
+
+      // Получаем данные пользователя из коллекции poputka_users
+      final record = await pb.collection('poputka_users').getOne(userId);
+      print('User data fetched successfully for ID: $userId');
+
+      return record.toJson();
+    } catch (e) {
+      print('Error fetching user data by ID $userId: $e');
+      return null;
+    }
+  }
+
+  // Create demo rides for testing
+  Future<bool> createDemoRides() async {
+    try {
+      if (!pb.authStore.isValid) {
+        print('User not authenticated');
+        return false;
+      }
+
+      print('Creating demo rides...');
+
+      // Get available areas
+      final areas = await getAreas();
+      if (areas.isEmpty) {
+        print('No areas available to create demo rides');
+        return false;
+      }
+
+      // Choose random areas for rides
+      final fromArea = areas[0]; // First area
+      final toArea =
+          areas.length > 1 ? areas[1] : areas[0]; // Second area or first again
+
+      print('Using areas:');
+      print('- From: ${fromArea.data['name']} (${fromArea.id})');
+      print('- To: ${toArea.data['name']} (${toArea.id})');
+
+      // Create 3 demo rides
+      final DateTime now = DateTime.now();
+      final TimeOfDay timeNow = TimeOfDay.now();
+
+      // Demo ride 1 - Driver ride today
+      await createRide(
+        fromAreaId: fromArea.id,
+        toAreaId: toArea.id,
+        date: now,
+        time: TimeOfDay(hour: timeNow.hour + 1, minute: 0),
+        isDriver: true,
+        availableSeats: 3,
+        price: 500,
+        notes: 'Demo driver ride',
+      );
+
+      // Demo ride 2 - Passenger ride tomorrow
+      await createRide(
+        fromAreaId: toArea.id,
+        toAreaId: fromArea.id,
+        date: now.add(const Duration(days: 1)),
+        time: TimeOfDay(hour: 10, minute: 30),
+        isDriver: false,
+        availableSeats: 1,
+        notes: 'Demo passenger ride',
+      );
+
+      // Demo ride 3 - Driver ride next week
+      await createRide(
+        fromAreaId: fromArea.id,
+        toAreaId: toArea.id,
+        date: now.add(const Duration(days: 7)),
+        time: TimeOfDay(hour: 15, minute: 0),
+        isDriver: true,
+        availableSeats: 2,
+        price: 600,
+        notes: 'Demo driver ride next week',
+      );
+
+      print('Successfully created 3 demo rides');
+      return true;
+    } catch (e) {
+      print('Error creating demo rides: $e');
+      print('Stack trace: ${StackTrace.current}');
       return false;
     }
   }

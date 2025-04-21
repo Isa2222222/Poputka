@@ -240,8 +240,10 @@ class _HomePageState extends State<HomePage> {
 
         if (result != null && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Поездка успешно создана'),
+            SnackBar(
+              content: Text(isDriver
+                  ? 'Поездка успешно создана. Ожидайте пассажиров.'
+                  : 'Поездка успешно создана. Ожидайте водителя.'),
               backgroundColor: Colors.green,
             ),
           );
@@ -334,7 +336,7 @@ class _HomePageState extends State<HomePage> {
               foregroundColor: !isDriver ? Colors.white : Colors.black,
             ),
             child: const Text(
-              'Найти попутчика',
+              'Я пассажир',
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -586,6 +588,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildSubmitButton() {
+    String buttonText;
+    if (_isEditMode) {
+      buttonText = 'Сохранить изменения';
+    } else if (isDriver) {
+      buttonText = 'Создать поездку как водитель';
+    } else {
+      buttonText = 'Создать поездку как пассажир';
+    }
+
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
@@ -605,9 +616,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               )
             : Text(
-                _isEditMode
-                    ? 'Сохранить изменения'
-                    : (isDriver ? 'Найти пассажиров' : 'Найти водителя'),
+                buttonText,
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,

@@ -7,6 +7,7 @@ import 'pages/profile_page.dart';
 import 'pages/login_page.dart';
 import 'pages/register_page.dart';
 import 'pages/edit_profile_page.dart';
+import 'pages/available_rides_page.dart';
 import 'widgets/bottom_nav_bar.dart';
 import 'services/pocketbase_service.dart';
 
@@ -65,6 +66,10 @@ final _router = GoRouter(
         final extra = state.extra as Map<String, dynamic>?;
         return EditProfilePage(initialData: extra);
       },
+    ),
+    GoRoute(
+      path: '/available-rides',
+      builder: (context, state) => const AvailableRidesPage(),
     ),
     ShellRoute(
       builder: (context, state, child) {

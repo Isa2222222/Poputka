@@ -1065,6 +1065,37 @@ class PocketBaseService {
       print('Error creating demo rides: $e');
       print('Stack trace: ${StackTrace.current}');
       return false;
+  // Получение доступных поездок
+  Future<List<RideModel>> getAvailableRides() async {
+    try {
+      // Получаем записи из коллекции поездок со статусом "pending"
+      final records = await pb.collection('poputka_rides').getFullList(
+            sort: '-created',
+            expand: 'fromArea,toArea',
+            filter: 'status = "pending"',
+          );
+
+      // Преобразуем записи в модели
+      final rides = <RideModel>[];
+      for (final record in records) {
+        // Получаем связанные области
+        final fromArea = record.expand['fromArea'] as RecordModel?;
+        final toArea = record.expand['toArea'] as RecordModel?;
+
+        // Если области не найдены, пропускаем запись
+        if (fromArea == null || toArea == null) continue;
+
+        rides.add(RideModel.fromRecord(
+          record,
+          fromArea: fromArea,
+          toArea: toArea,
+        ));
+      }
+
+      return rides;
+    } catch (e) {
+      print('Error fetching available rides: $e');
+      return [];
     }
   }
 }

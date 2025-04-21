@@ -247,8 +247,8 @@ class _HomePageState extends State<HomePage> {
               backgroundColor: Colors.green,
             ),
           );
-          // Переходим на страницу поездок
-          context.go('/rides');
+          // Переходим на страницу доступных поездок
+          context.go('/available-rides');
         }
       }
 
@@ -287,6 +287,15 @@ class _HomePageState extends State<HomePage> {
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         backgroundColor: AppColors.primary,
+        actions: [
+          // Кнопка для просмотра доступных поездок
+          if (!_isEditMode)
+            IconButton(
+              icon: const Icon(Icons.list),
+              onPressed: () => context.go('/available-rides'),
+              tooltip: 'Доступные поездки',
+            ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Padding(

@@ -1065,11 +1065,14 @@ class PocketBaseService {
       print('Error creating demo rides: $e');
       print('Stack trace: ${StackTrace.current}');
       return false;
+    }
+  }
+
   // Получение доступных поездок
   Future<List<RideModel>> getAvailableRides() async {
     try {
       // Получаем записи из коллекции поездок со статусом "pending"
-      final records = await pb.collection('poputka_rides').getFullList(
+      final records = await pb.collection('poputka_ride').getFullList(
             sort: '-created',
             expand: 'fromArea,toArea',
             filter: 'status = "pending"',

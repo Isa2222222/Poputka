@@ -18,6 +18,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _phoneController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
+  final _pbService = PocketBaseService();
 
   @override
   void initState() {
@@ -47,7 +48,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         return;
       }
 
-      final success = await pocketBaseService.updateUserProfile(
+      final success = await _pbService.updateUserProfile(
         name,
         phone,
       );
